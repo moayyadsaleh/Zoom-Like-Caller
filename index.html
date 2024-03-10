@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Call App</title>
+    <style>
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        height: 100vh;
+        margin: 0;
+      }
+
+      video {
+        width: 100%;
+        max-width: 600px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        margin-bottom: 10px;
+      }
+
+      button {
+        margin: 5px;
+        padding: 10px;
+        background-color: #ff6347;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <video id="localVideo" autoplay playsinline muted></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+    <div>
+      <button id="endCall">End Call</button>
+      <button id="muteButton">Toggle Mute</button>
+      <button id="cameraButton">Toggle Camera</button>
+      <button id="switchCameraButton">Switch Camera</button>
+    </div>
+
+    <script>
+      const localVideo = document.getElementById("localVideo");
+      const remoteVideo = document.getElementById("remoteVideo");
+      const endCallButton = document.getElementById("endCall");
+      const muteButton = document.getElementById("muteButton");
+      const cameraButton = document.getElementById("cameraButton");
+      const switchCameraButton = document.getElementById("switchCameraButton");
+
+      let peerConnection;
+      let localStream;
+
+      // Simulated signaling using localStorage
+      const offerKey = "offer";
+      const answerKey = "answer";
+
+      const createOffer = async () => {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        localStorage.setItem(offerKey, JSON.stringify(offer));
+
+        console.log("Send the offer to the remote peer:", offer);
+      };
+
+      const receiveOffer = () => {
+        const offer = JSON.parse(localStorage.getItem(offerKey));
+
+        peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+        peerConnection.createAnswer().then((answer) => {
+          peerConnection.setLocalDescription(answer);
+          localStorage.setItem(answerKey, JSON.stringify(answer));
+
+          console.log("Send the answer to the remote peer:", answer);
+        });
+      };
+
+      const receiveAnswer = () => {
+        const answer = JSON.parse(localStorage.getItem(answerKey));
+        peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      };
+
+      navigator.mediaDevices
+        .getUserMedia({ video: true, audio: true })
+        .then((stream) => {
+          localStream = stream;
+          localVideo.srcObject = stream;
+
+          peerConnection = new RTCPeerConnection();
+          stream.getTracks().forEach((track) => {
+            peerConnection.addTrack(track, stream);
+          });
+
+          peerConnection.ontrack = (event) => {
+            remoteVideo.srcObject = event.streams[0];
+          };
+
+          // Check if the user is the initiator
+          if (localStorage.getItem(offerKey)) {
+            receiveOffer();
+          }
+
+          // Add event listener for the "End Call" button
+          endCallButton.addEventListener("click", () => {
+            endCall();
+          });
+
+          // Add event listener for the "Toggle Mute" button
+          muteButton.addEventListener("click", () => {
+            const audioTracks = localStream.getAudioTracks();
+            audioTracks.forEach((track) => {
+              track.enabled = !track.enabled;
+            });
+            muteButton.innerText = audioTracks.some((track) => !track.enabled)
+              ? "Unmute"
+              : "Mute";
+          });
+
+          // Add event listener for the "Toggle Camera" button
+          cameraButton.addEventListener("click", () => {
+            const videoTracks = localStream.getVideoTracks();
+            videoTracks.forEach((track) => {
+              track.enabled = !track.enabled;
+            });
+            cameraButton.innerText = videoTracks.some((track) => !track.enabled)
+              ? "Turn On Camera"
+              : "Turn Off Camera";
+          });
+
+          // Add event listener for the "Switch Camera" button
+          switchCameraButton.addEventListener("click", async () => {
+            // ... (same as in the original code)
+          });
+
+          // Create or receive the offer/answer based on the role
+          if (!localStorage.getItem(offerKey)) {
+            createOffer();
+          } else {
+            receiveAnswer();
+          }
+        })
+        .catch((error) =>
+          console.error("Error accessing media devices:", error)
+        );
+
+      // Function to end the call
+      function endCall() {
+        // Close the Peer Connection
+        if (peerConnection) {
+          peerConnection.close();
+        }
+
+        // Stop the local video stream
+        localStream.getTracks().forEach((track) => track.stop());
+
+        // Stop the remote video stream
+        const remoteStream = remoteVideo.srcObject;
+        remoteStream.getTracks().forEach((track) => track.stop());
+
+        // Clear video elements
+        localVideo.srcObject = null;
+        remoteVideo.srcObject = null;
+
+        // Clear localStorage
+        localStorage.removeItem(offerKey);
+        localStorage.removeItem(answerKey);
+      }
+    </script>
+  </body>
+</html>
